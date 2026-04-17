@@ -1,9 +1,8 @@
-import dotenv from "dotenv"
+// import dotenv from "dotenv"
+// dotenv.config();
 
-import connectDB from "./db/mongoDb.js"
+import connectDB from "./db/mongoDb.js";
 import { app } from "./app.js";
-
-dotenv.config();
 
 connectDB()
 .then(()=>{
