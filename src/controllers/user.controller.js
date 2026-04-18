@@ -111,8 +111,8 @@ const loginUser = asyncHandler(async (req, res) => {
                 throw new ApiError(404, "User does not exit")
         }
 
-        console.log("enter password", password, typeof password)
-        console.log("store password", user.password, typeof user.password)
+        // console.log("enter password", password, typeof password)
+        // console.log("store password", user.password, typeof user.password)
         // password check
         const isPasswordValid = await user.isPasswordCorrect(String(password))
 
@@ -151,7 +151,7 @@ const logOutUser = asyncHandler(async (req, res) => {
         await User.findByIdAndUpdate(req.user._id,
                 {
                         $set: {
-                                refreshToken: undefined
+                                refreshToken: 1 //remove the field from document
                         }
                 },
                 {
@@ -343,13 +343,14 @@ const updateUserCoverImg = asyncHandler(async (req, res) => {
 
 // get user channel details using aggregation pipeline
 const getUserChannelProfile = asyncHandler(async (req, res) => {
-        const username = req.params
+        const { username } = req.params
+        // console.log("username", username)
 
         if (!username?.trim()) {
                 throw new ApiError(400, "username not found")
         }
 
-        const channel = User.aggregate([
+        const channel = await User.aggregate([
                 {       //1 aggregation for filler doc & match user 
                         $match: {
                                 username: username?.toLowerCase()
@@ -374,10 +375,19 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
                 { //4 aggregation for add new field 
                         $addFields: {
                                 SubscribersCount: {
-                                        $size: "subscribers"
+                                        $cond: {
+                                                if: { $isArray: "$subscribers" },
+                                                then: { $size: "$subscribers" },
+                                                else: 0
+                                        }
                                 },
                                 channelSubscribedCount: {
-                                        $size: "$subscribedTo"
+                                        // $size: { $ifNull: ["$subscribedTo", []] }
+                                        $cond: {
+                                                if: { $isArray: "$subscribedTo" },
+                                                then: { $size: "$subscribedTo" },
+                                                else: 0
+                                        }
                                 },
                                 isSubscribed: {
                                         $cond: {
@@ -401,7 +411,7 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
                         }
                 }
         ])
-        // console.log("channel data",channel)
+        // console.log("channel data", channel)
 
         if (!channel?.length) {
                 throw new ApiError(404, "channel not found")
@@ -463,7 +473,7 @@ const getWatchHistory = asyncHandler(async (req, res) => {
                 .json(
                         new ApiResponse(
                                 200,
-                                user[0].WatchHistory,
+                                user[0].watchHistory,
                                 "Watch History fetch successfully"
                         )
                 )
