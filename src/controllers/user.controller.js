@@ -5,6 +5,7 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { User } from "../models/user.model.js";
 import jwt from "jsonwebtoken"
 import { Subscription } from "../models/subscription.model.js";
+import mongoose from "mongoose";
 
 //generate new token
 const generateAccessRefreshToken = async (userId) => {
@@ -402,17 +403,71 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
         ])
         // console.log("channel data",channel)
 
-        if(!channel?.length){
+        if (!channel?.length) {
                 throw new ApiError(404, "channel not found")
         }
-        return res 
-        .status(200)
-        .json(
-                new ApiResponse(200, channel[0], "User Channel fetch successfully")        
-        )
+        return res
+                .status(200)
+                .json(
+                        new ApiResponse(200, channel[0], "User Channel fetch successfully")
+                )
 })
 
+// watch history
+const getWatchHistory = asyncHandler(async (req, res) => {
+        const user = await User.aggregate([
+                {
+                        $match: {
+                                _id: new mongoose.Types.ObjectId(req.user._id)
+                        }
+                },
+                {
+                        $lookup: {
+                                from: "videos",  //db model
+                                localField: "watchHistory",
+                                foreignField: "_id",
+                                as: "watchHistory",
+                                pipeline: [ // nested pipeline
+                                        {
+                                                $lookup: {
+                                                        from: "users", // db model
+                                                        localField: "owner",
+                                                        foreignField: "_id",
+                                                        as: "owner",
+                                                        pipeline: [
+                                                                {
+                                                                        $project: {
+                                                                                fullname: 1,
+                                                                                username: 1,
+                                                                                avatar: 1
+                                                                        }
+                                                                }
+                                                        ]
+                                                }
 
+                                        },
+                                        {
+                                                $addFields: {
+                                                        owner: {
+                                                                $first: "$owner"
+                                                        }
+                                                }
+                                        }
+                                ]
+                        }
+                }
+        ])
+
+        return res
+                .status(200)
+                .json(
+                        new ApiResponse(
+                                200,
+                                user[0].WatchHistory,
+                                "Watch History fetch successfully"
+                        )
+                )
+})
 
 
 export {
@@ -425,5 +480,6 @@ export {
         updateAccountDetails,
         updateUserAvatar,
         updateUserCoverImg,
-        getUserChannelProfile
+        getUserChannelProfile,
+        getWatchHistory
 }
