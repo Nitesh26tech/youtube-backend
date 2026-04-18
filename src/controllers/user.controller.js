@@ -4,6 +4,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { User } from "../models/user.model.js";
 import jwt from "jsonwebtoken"
+import { Subscription } from "../models/subscription.model.js";
 
 //generate new token
 const generateAccessRefreshToken = async (userId) => {
@@ -246,56 +247,56 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
 const getCurrentUser = asyncHandler(async (req, res) => {
         return res
                 .status(200)
-                .json(200, req.user, "current user fetched successfully")
+                .json(new ApiResponse(200, req.user, "current user fetched successfully"))
 })
 
 // update user Account details 
-const updateAccountDetails = asyncHandler(async(req, res)=>{
+const updateAccountDetails = asyncHandler(async (req, res) => {
         const { fullname, email } = req.body
 
-        if(!fullname || !email ){
+        if (!fullname || !email) {
                 throw new ApiError(400, "All field  required")
         }
 
-        const UpdatedUser = User.findByIdAndUpdate(
+        const UpdatedUser = await User.findByIdAndUpdate(
                 req.user?._id,
                 {
-                        $set:{
+                        $set: {
                                 fullname,
-                                email : email
+                                email: email
                         }
                 },
-                { new: true}
+                { new: true }
         ).select("-password ")
 
         return res
-        .status(200)
-        .json(new ApiResponse(200, UpdatedUser, "Account details Updated"))
+                .status(200)
+                .json(new ApiResponse(200, UpdatedUser, "Account details Updated"))
 })
 
 // update user avatar
-const updateUserAvatar = asyncHandler(async(req, res)=>{
+const updateUserAvatar = asyncHandler(async (req, res) => {
 
         const avatarLocalPath = req.file?.path
 
-        if(!avatarLocalPath){
+        if (!avatarLocalPath) {
                 throw new ApiError(400, "Avatar file is missing")
         }
 
         const avatar = await uploadOnCloudinary(avatarLocalPath)
 
-        if(!avatar.url){
+        if (!avatar.url) {
                 throw new ApiError(400, "Error while uploading on avatar")
         }
 
         const updateAvatar = await User.findByIdAndUpdate(req.user?._id,
                 {
-                        $set:{
-                                avatar : avatar.url
+                        $set: {
+                                avatar: avatar.url
                         }
                 },
                 {
-                new : true
+                        new: true
                 }
         ).select("-password")
 
@@ -333,9 +334,81 @@ const updateUserCoverImg = asyncHandler(async (req, res) => {
         ).select("-password")
 
         return res
+                .status(200)
+                .json(
+                        new ApiResponse(200, updatedImage, "CoverImage is updated Successfully")
+                )
+})
+
+// get user channel details using aggregation pipeline
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+        const username = req.params
+
+        if (!username?.trim()) {
+                throw new ApiError(400, "username not found")
+        }
+
+        const channel = User.aggregate([
+                {       //1 aggregation for filler doc & match user 
+                        $match: {
+                                username: username?.toLowerCase()
+                        }
+                },
+                { //2 aggregation for get subscribers of a channel
+                        $lookup: {
+                                from: "subscriptions",
+                                localField: "_id",
+                                foreignField: "channel",
+                                as: "subscribers"
+                        }
+                },
+                { //3 aggregation for get subscribed 
+                        $lookup: {
+                                from: "subscriptions",
+                                localField: "_id",
+                                foreignField: "subscribers",
+                                as: "subscribedTo"
+                        }
+                },
+                { //4 aggregation for add new field 
+                        $addFields: {
+                                SubscribersCount: {
+                                        $size: "subscribers"
+                                },
+                                channelSubscribedCount: {
+                                        $size: "$subscribedTo"
+                                },
+                                isSubscribed: {
+                                        $cond: {
+                                                if: { $in: [req.user?._id, "$subscribers.subscriber"] },
+                                                then: true,
+                                                else: false
+                                        }
+                                }
+                        }
+                },
+                { //5 aggregation for final projection
+                        $project: {
+                                fullname: 1,
+                                username: 1,
+                                SubscribersCount: 1,
+                                channelSubscribedCount: 1,
+                                isSubscribed: 1,
+                                avatar: 1,
+                                coverImage: 1,
+                                email: 1
+                        }
+                }
+        ])
+        // console.log("channel data",channel)
+
+        if(!channel?.length){
+                throw new ApiError(404, "channel not found")
+        }
+        return res 
         .status(200)
-        .json( 
-                new ApiResponse(200, updatedImage, "CoverImage is updated Successfully" )
+        .json(
+                new ApiResponse(200, channel[0], "User Channel fetch successfully")        
         )
 })
 
@@ -351,5 +424,6 @@ export {
         getCurrentUser,
         updateAccountDetails,
         updateUserAvatar,
-        updateUserCoverImg
+        updateUserCoverImg,
+        getUserChannelProfile
 }
