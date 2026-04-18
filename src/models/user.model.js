@@ -60,7 +60,10 @@ userSchema.pre("save", async function () {
 
 //checking the password using bcrypt middleware
 userSchema.methods.isPasswordCorrect = async function (password) {
-        return await bcrypt.compare(password, this.password)
+        if (!password || !this.password) {
+                throw new Error("Password missing");
+        }
+        return await bcrypt.compare(String(password), this.password)
 }  // true or false
 
 //create token
