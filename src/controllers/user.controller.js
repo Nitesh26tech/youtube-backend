@@ -3,8 +3,8 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { User } from "../models/user.model.js";
-import jwt from "jsonwebtoken"
 import { Subscription } from "../models/subscription.model.js";
+import jwt from "jsonwebtoken"
 import mongoose from "mongoose";
 
 //generate new token
